@@ -1,0 +1,170 @@
+---
+title: "Assignment 1"
+author: "Dylan Culp"
+date: "9/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+ library(tidycensus)
+ library(tidyverse)
+
+```
+
+Here are my selected variables: 
+```{r}
+vars <- c(tot_hh = "H001001",
+         tot_rural_hh = "H002005",
+         tot_rent_hh = "H004004",
+         avg_hh_size = "H012001",
+         tot_pop = "P003001",
+         nh_white_pop = "P005003",
+         nh_black_pop = "P005004",
+         nh_asian_pop = "P005006",
+         hispanic_pop = "P005010",
+         med_age = "P013001")
+```
+
+Now I will load 2010 Decennial data for King County, WA:
+```{r}
+ king_tracts <- get_decennial(geography = "tract", variables = vars,
+                            state = "WA", county = "King",
+                            output = "wide") %>%
+     mutate(rural = (tot_rural_hh == tot_hh) ,
+            pct_rental = tot_rent_hh / tot_hh,
+            majority_race_eth = case_when(
+                nh_white_pop / tot_pop > 0.5 ~ "nh_white",
+              nh_black_pop / tot_pop > 0.5 ~ "nh_black",
+                nh_asian_pop / tot_pop > 0.5 ~ "nh_asian",
+                hispanic_pop / tot_pop > 0.5 ~ "hispanic",
+                (nh_white_pop + nh_black_pop + nh_asian_pop + hispanic_pop) /
+                    tot_pop < 0.5 ~ "other",
+                TRUE ~ "None")) %>%
+     filter(tot_pop > 0, tot_hh > 0) %>%
+     select(GEOID, rural, majority_race_eth, 
+            pct_rental, avg_hh_size, tot_pop, med_age) 
+```
+
+1. Simple Scatterplot--bivariate 
+
+```{r}
+ggplot(king_tracts, 
+        aes(x = med_age,
+            y = avg_hh_size,)) +
+     geom_point() +
+     scale_x_continuous(name = "Median age",
+                        breaks = seq(10, 80, by = 10),
+                        labels = paste(seq(10, 80, by = 10))) +
+     scale_y_continuous(name = "Average household size",
+                      breaks = seq(1, 4, by = 0.5))
+                         labels = paste(seq(1, 4, by = 0.5))+
+     theme_bw()
+```
+There does not appear to be a meaningful relationship between median age and average household size in King County.
+
+
+
+2. Colorful Scatterplot (three variables)
+
+```{r}
+ggplot(king_tracts, 
+        aes(x = med_age,
+            y = avg_hh_size,
+            color = majority_race_eth)) +
+     geom_point() +
+     scale_x_continuous(name = "Median age",
+                        breaks = seq(10, 80, by = 10),
+                        labels = paste(seq(10, 80, by = 10))) +
+     scale_y_continuous(name = "Average household size",
+                      breaks = seq(1, 4, by = 0.5))
+                         labels = paste(seq(1, 4, by = 0.5))+
+       scale_color_discrete(name = "Majority race/ethnicity",
+                       labels = c("Hispanic",
+                                  "Non-Hispanic Asian",
+                                  "Non-Hispanic white",
+                                  "No majority")) +
+                           theme_bw()
+```
+This plot uses the same x and y axes, with race/ethnicity illustrated by color. While little to no correlation between median age and household size remains, adding race/ethnicity shows a general relationship. Interestingly, the most diverse tracts (those without a majority race) tend to be on the younger side, with medians between 30 and 45. These households also tend to have a higher size.
+
+
+
+3. Simple Histogram
+
+```{r}
+ qplot(king_tracts$tot_pop,
+       main = "Distribution of population per tract",
+       xlab="Population",
+       ylab="Frequency",
+       binwidth = 500)
+```
+This is a simple histogram showing the amount of people in each census tract. I had expected there to be more consistency between the population of each tract.
+
+
+4. Barplot
+```{r}
+
+```
+
+```{r}
+ggplot(king_tracts, aes(x="", y=tot_pop, fill= majority_race_eth))+
+  geom_bar(width=1, stat = "identity")
+```
+This bar plot breaks down the tracts by majority racial/ethnic status.
+
+
+5. Pie Chart
+
+```{r}
+ggplot(king_tracts, aes(x="", y=tot_pop, fill= majority_race_eth))+
+  geom_bar(width=1, stat = "identity")+
+  coord_polar("y", start=0)+
+  scale_fill_brewer(palette="Dark2")
+```
+This is the same data in pie chart form, with a fresh color scheme to boot.
+
+
+6. Box Plot
+
+```{r}
+ggplot(king_tracts, aes(majority_race_eth, med_age ))+
+  geom_boxplot(varwidth=T, fill="plum")
+```
+7. Violin Plot
+
+```{r}
+ggplot(king_tracts, aes(majority_race_eth, med_age))+
+  geom_violin()
+  
+```
+This is the same data as the box plot, but shown with Violins.I think I find this one easier to understand at a glance.
+
+
+8. Line Chart
+
+```{r}
+ggplot(king_tracts, aes(x=pct_rental, y=avg_hh_size, size=med_age))+geom_line()
+```
+I've plotted three variables on this line chart, illustrated through the line thickness, x axis, and y axis. It looks a bit ugly, and I'm not sure this is the correct use of a line graph, but I'm happy to have the option.
+
+
+9. A simple bar chart
+
+```{r}
+ggplot(king_tracts, aes (x=rural))+ geom_bar()
+  
+```
+My dataset only has 4 rural tracts out of 397 observations. I haven't used the rural category until this point.
+
+
+10. Density Plot
+
+```{r}
+ggplot(king_tracts, aes(pct_rental))+
+         geom_density()
+```
+This density plot illustrates the proportion of renters by tract, with the median occurring a shade above 25%.
