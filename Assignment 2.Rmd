@@ -1,0 +1,104 @@
+---
+title: "Assignment 2"
+author: "Dylan Culp"
+date: "9/22/2020"
+output: html_document
+---
+
+Here are my libraries:
+
+```{r}
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(tidyverse)
+library(ggspatial)
+library(cartogram)
+library(ggthemes)
+library(rgeos)
+library(rnaturalearthdata)
+```
+
+I've chosen Africa as my area to study. I will import the world dataset, then filter out all non-African countries:
+
+```{r}
+world <- ne_countries(scale = 50, returnclass = "sf")
+africa_countries <- world %>%
+                    filter(continent=="Africa")
+
+```
+
+This first map is using an Albers Equal Ares Africa set of coordinates
+```{r}
+ggplot(africa_countries)+
+       geom_sf()+
+      theme_bw()
+```
+I will try two other coordinate systems: an equal area focusing on Brazil, and a mercator for India
+
+```{r}
+brazil_coords <- "+proj=aea +lat_1=10 +lat_2=-40 +lat_0=-25 +lon_0=-50 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+
+india_coords <- "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"
+
+
+africa_countries_2 <- africa_countries %>%
+  st_transform(crs = brazil_coords)
+
+africa_countries_3 <- africa_countries %>%
+  st_transform(crs = india_coords)
+```
+
+Here are those maps:
+
+```{r}
+ggplot(africa_countries_2)+
+       geom_sf()+
+      theme_bw()
+
+ggplot(africa_countries_3)+
+       geom_sf()+
+      theme_bw()
+```
+
+
+
+I will then use this dataset for my first map--a standard chloropleth map, illustrating the population estimates per country. I've chosen an Albers Equal Area Africa projection.
+
+```{r}
+africa_aea <- "+proj=aea +lat_1=36.5 +lat_2=29.071428571429 +lat_0=32.7857142857145 +lon_0=-14.111111111111 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+
+africa_pop_map <- ggplot(africa_countries)+
+                  geom_sf(aes(fill = pop_est))
+                  coord_sf(crs = africa_aea)
+
+africa_pop_map                  
+```
+
+My second map will be a cartogram that retains the above color scheme for population, while adjusting each country's size according to GDP.
+
+Note: I believe there is an error here--I think the distortions are due to the coordinates rathern than the actual 
+
+```{r}
+ggplot(africa_countries, aes(fill = pop_est)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    name = "Population by country in Africa",
+    breaks = seq(0, 200000000, by = 20000000),
+    labels = formatC(seq(0, 200000000, by = 20000000), 
+                     big.mark = ",", format = "f", digits = 0)) +
+  coord_sf(crs = africa_aea)+
+  theme_map() +
+  theme(legend.background = element_blank())
+```
+
+Lastly, I'd like to arrange the countries in order, from largest in population to smallest.I had trouble getting the labels in a way that has both readable text and is positioned correctly under the corresponding column.
+
+
+```{r}
+ggplot(africa_countries) +
+  geom_col(aes(x=reorder(sovereignt, -pop_est), y= pop_est))+
+          theme(axis.text.x = element_text(size=6, angle=315))
+             
+```
+
