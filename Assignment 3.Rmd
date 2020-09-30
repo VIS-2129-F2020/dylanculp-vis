@@ -1,0 +1,117 @@
+---
+title: "Assignment 3"
+author: "Dylan Culp"
+date: "9/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(sf)
+library(tidyverse)
+library(ggthemes)
+library(ggspatial)
+library(units)
+library(nngeo)
+```
+
+My four datasets are from Chicago. The first two are from the CTA open data site (https://www.transitchicago.com/data/) and the second two are from the city of Chicago's Open Data portal (https://data.cityofchicago.org/)
+
+  A. CTA bus stops (point)
+  B. CTA "L" Stations (point)
+  C. Community Areas (polygon)
+  D. Central Business District (polygon)
+  
+  
+I will bring each dataset into R: 
+```{r}
+bus_stops <- st_read("https://data.cityofchicago.org/download/84eu-buny/text%2Fxml", quiet=TRUE)
+l_stops <- st_read("https://data.cityofchicago.org/download/4qtv-9w43/application%2Fxml", quiet=TRUE)
+comm_areas <- st_read("https://data.cityofchicago.org/api/geospatial/cauq-8yn6?method=export&format=GeoJSON", quiet=TRUE)
+cbd <- st_read("https://data.cityofchicago.org/api/geospatial/tksj-nvsw?method=export&format=GeoJSON", quiet=TRUE)
+```
+  
+  
+I will then transform the coordinates for each dataset to a Chicago PROJ4 string: 
+```{r}
+chicago_coordinates <- "+proj=tmerc +lat_0=36.66666666666666 +lon_0=-88.33333333333333 +k=0.9999749999999999 +x_0=300000 +y_0=0 +ellps=GRS80 +units=m +no_defs"
+
+bus_stops <- bus_stops %>%
+  st_transform(chicago_coordinates)
+
+l_stops <- l_stops %>%
+  st_transform(chicago_coordinates)
+
+comm_areas <- comm_areas %>%
+  st_transform(chicago_coordinates)
+
+cbd <- cbd %>%
+  st_transform(chicago_coordinates)
+```
+
+1. How many L stops are in each community area?
+
+```{r}
+comm_areas <- comm_areas %>%
+  mutate(l_stops = lengths(st_covers(comm_areas, l_stops)))
+
+ggplot(comm_areas)+
+  geom_sf(color = NA,
+  aes(fill = l_stops))
+```
+
+2. How many bus stops are in each community area?
+
+```{r}
+comm_areas <- comm_areas %>%
+  mutate(bus_stops = lengths(st_covers(comm_areas, bus_stops)))
+
+ggplot(comm_areas)+
+  geom_sf(color = NA,
+  aes(fill = bus_stops))
+```
+
+3. Average distance between an L stop and nearest bus stop?
+
+```{r}
+l_stops <- l_stops %>%
+  mutate(l_dist = st_nn(l_stops, bus_stops,
+                          returnDist = TRUE)$dist) %>%
+    mutate(l_dist = as.numeric(l_dist))
+
+avg_bus_dist <-mean(l_stops$l_dist)
+avg_bus_dist
+```
+```{r}
+ggplot(water) + 
+  geom_sf(data = bus_stops, size = 0.1,
+          aes(color=avg_bus_dist))+
+  scale_color_viridis_c(name = "Distance between bus stops and L stops")
+
+```
+
+
+
+
+4. How many neighborhoods does the CBD overlap with?
+
+```{r}
+comm_areas <- comm_areas %>%
+  mutate(cbd_overlap = lengths(st_overlaps(cbd, comm_areas))) %>%
+  mutate(has_overlap = cbd_overlap > 0)
+
+```
+
+Chicago's CBD overlaps with 5 neighborhoods.
+
+
+```{r}
+ggplot()+
+  geom_sf(data = comm_areas)
+  geom_sf(data = comm_areas)
+  
+```
+
