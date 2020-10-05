@@ -56,11 +56,11 @@ cbd <- cbd %>%
 
 ```{r}
 comm_areas <- comm_areas %>%
-  mutate(l_stops = lengths(st_covers(comm_areas, l_stops)))
+  mutate(num_l_stops = lengths(st_covers(comm_areas, l_stops)))
 
 ggplot(comm_areas)+
   geom_sf(color = NA,
-  aes(fill = l_stops))
+  aes(fill = num_l_stops))
 ```
 
 2. How many bus stops are in each community area?
@@ -74,34 +74,59 @@ ggplot(comm_areas)+
   aes(fill = bus_stops))
 ```
 
-3. Average distance between an L stop and nearest bus stop?
+3. What is the average distance between an L stop and nearest bus stop?
 
 ```{r}
 l_stops <- l_stops %>%
-  mutate(l_dist = st_nn(l_stops, bus_stops,
+  mutate(bus_dist = st_nn(l_stops, bus_stops,
+                          returnDist = TRUE)$dist) %>%
+    mutate(bus_dist = as.numeric(bus_dist))
+
+  avg_bus_dist <- mean(l_stops$bus_dist)
+  avg_bus_dist
+```
+Now for a map: 
+
+```{r}
+ggplot(bus_stops)+
+  geom_sf(data = l_stops, size = 2,
+          aes(color = bus_dist))+
+           scale_color_viridis_c(name = "Distance between each L station and the nearest bus stop")
+```
+Just about every L station is very close to a bus stop. This makes sense, as the bus network is presumably designed to feed riders to the rail system. I believe the one outlier that is very far from a local bus stop (yellow dot to the left) is O'Hare Airport.
+
+
+4. What is the average distance between each bus stop and the nearest L station?
+```{r}
+bus_stops <- bus_stops %>%
+  mutate(l_dist = st_nn(bus_stops, l_stops,
                           returnDist = TRUE)$dist) %>%
     mutate(l_dist = as.numeric(l_dist))
 
-avg_bus_dist <-mean(l_stops$l_dist)
-avg_bus_dist
+  avg_l_dist <- mean(bus_stops$l_dist)
+  avg_l_dist
 ```
+Unsurprisingly, the figure is significantly higher for bus stops, since buses fill in the gaps in areas without rail service.
+
+Map: 
 ```{r}
-ggplot(water) + 
+ggplot(l_stops) + 
   geom_sf(data = bus_stops, size = 0.1,
-          aes(color=avg_bus_dist))+
-  scale_color_viridis_c(name = "Distance between bus stops and L stops")
+          aes(color=l_dist))+
+  scale_color_viridis_c(name = "Distance between each bus stop and the nearest L station")
 
 ```
+For much of the city the reverse is true--most bus stops are in 
 
-
-
-
-4. How many neighborhoods does the CBD overlap with?
+5. How many neighborhoods does the CBD overlap with?
 
 ```{r}
 comm_areas <- comm_areas %>%
-  mutate(cbd_overlap = lengths(st_overlaps(cbd, comm_areas))) %>%
-  mutate(has_overlap = cbd_overlap > 0)
+  mutate(num_cbd = lengths(st_overlaps(comm_areas, cbd))) %>%
+  mutate(is_cbd = num_cbd >0)
+
+number_cbd_overlap <- sum(comm_areas$is_cbd)
+number_cbd_overlap
 
 ```
 
@@ -110,8 +135,23 @@ Chicago's CBD overlaps with 5 neighborhoods.
 
 ```{r}
 ggplot()+
-  geom_sf(data = comm_areas)
-  geom_sf(data = comm_areas)
+  geom_sf(fill="lightblue", color=NA)+
+  geom_sf(data=comm_areas,
+          aes(fill=is_cbd))
+```
+
+6. What is the density of L stations per square km, by community area? 
+
+
+```{r}
+comm_areas <- comm_areas %>%
+  mutate(area=set_units(st_area(comm_areas), km^2)) %>%
+  mutate(l_dens = as.numeric(num_l_stops / area))
   
+
+ggplot(comm_areas)+
+  geom_sf(data= comm_areas,
+          aes(fill = l_dens))+
+ scale_color_viridis_c(name = "L stations per square kilometer")
 ```
 
