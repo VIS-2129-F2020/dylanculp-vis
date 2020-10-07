@@ -1,0 +1,161 @@
+---
+title: "Assignment 4"
+author: "Dylan Culp"
+date: "10/6/2020"
+output: html_document
+---
+
+```{r}
+library(osmdata)
+library(opentripplanner)
+library(tidyverse)
+library(sf)
+library(ggthemes)
+library(ggspatial)
+```
+
+I will use a dataset of recycling drop off sites in Chicago for this exercise. 
+
+```{r}
+recycling_sites <- st_read("https://data.cityofchicago.org/api/geospatial/27cy-fdic?method=export&format=KML")
+recycling_sites <- recycling_sites[-1,]
+```
+Here is a map of Chicago's streets from OSM:
+
+```{r}
+chicago_street_features <- opq(bbox = 'Chicago IL USA') %>%
+  add_osm_feature(key = 'highway') %>%
+  osmdata_sf()
+
+chicago_streets <- chicago_street_features$osm_lines
+
+ggplot(chicago_streets)+
+  geom_sf()+
+  theme_map()
+```
+Here is the groundwork for building the isochrones: 
+```{r}
+path_otp <- otp_dl_jar("OTP")
+```
+
+```{r}
+path_data <- file.path(getwd(), "OTP")
+path_otp <- paste(path_data, "otp.jar",sep = "/")
+
+otp_build_graph(otp = path_otp, dir = path_data, memory = 1024) 
+```
+
+```{r}
+otp_setup(otp = path_otp, dir = path_data, memory =1024)
+
+```
+
+```{r}
+otpcon <- otp_connect()
+
+```
+
+
+My first map overlays 10 minute walk and 10 minute drive isochrones:
+```{r}
+iso_10min_walk <- 
+  otp_isochrone(otpcon = otpcon, fromPlace = recycling_sites, 
+                mode = "WALK", cutoffSec = 600) %>%
+  mutate(mode = "walk")
+
+iso_10min_drive <- 
+  otp_isochrone(otpcon = otpcon, fromPlace = recycling_sites, 
+                mode = "CAR", cutoffSec = 600) %>%
+  mutate(mode = "drive")
+
+iso_all_modes <- rbind(iso_10min_drive, iso_10min_walk)
+
+otp_stop()
+
+```
+
+
+Here is the map output:
+```{r}
+right_side <- st_bbox(iso_all_modes)$xmax
+left_side  <- st_bbox(iso_all_modes)$xmin
+top_side <- st_bbox(iso_all_modes)$ymax
+bottom_side <- st_bbox(iso_all_modes)$ymin
+
+ggplot(iso_all_modes) +
+  annotation_map_tile(zoomin = 0, progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.5) +
+  geom_sf(data = recycling_sites) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 10 minutes",
+                       labels = c("By car", "By foot")) +
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+My next map will look at bike accessibility within 10 minutes:
+```{r}
+iso_10min_bike <- 
+  otp_isochrone(otpcon = otpcon, fromPlace = recycling_sites, 
+                mode = "BICYCLE", cutoffSec = 600) %>%
+  mutate(mode = "bicycle")
+
+right_side <- st_bbox(iso_all_modes)$xmax
+left_side  <- st_bbox(iso_all_modes)$xmin
+top_side <- st_bbox(iso_all_modes)$ymax
+bottom_side <- st_bbox(iso_all_modes)$ymin
+
+ggplot(iso_10min_bike) +
+  annotation_map_tile(zoomin = 0, progress = "none") +
+  geom_sf(aes(fill = mode), alpha = 0.5) +
+  geom_sf(data = recycling_sites) +
+  coord_sf(xlim = c(left_side, right_side), 
+           ylim = c(bottom_side, top_side), expand = FALSE) +
+  scale_fill_viridis_d(name = "Area that is reachable within 10 minutes",
+                       labels = c("By bicycle")) +
+  theme_map() +
+  labs(caption = "Basemap Copyright OpenStreetMap contributors")
+```
+
+
+Lastly, I will calculate and visualize the cumulative area for each mode. I'm almost certainly doing this in an unnecessarily roundabout way, but all the shortcuts I tried resulted in errors.
+
+First, adding up the isochromes for each mode:
+
+```{r}
+bike_area <- iso_10min_bike %>%
+  mutate(area=st_area(iso_10min_bike)) %>%
+  st_set_geometry(NULL) %>%
+  pivot_wider(names_from = mode, values_from = area) 
+```
+
+```{r}
+car_area <- iso_10min_drive %>%
+  mutate(area=st_area(iso_10min_drive)) %>%
+  st_set_geometry(NULL) %>%
+  pivot_wider(names_from = mode, values_from = area) 
+```
+
+```{r}
+walk_area <- iso_10min_walk %>%
+  mutate(area=st_area(iso_10min_walk)) %>%
+  st_set_geometry(NULL) %>%
+  pivot_wider(names_from = mode, values_from = area) 
+```
+
+```{r}
+sum(bike_area$bicycle)
+sum(car_area$drive)
+sum(walk_area$walk)
+```
+I then created a new data frame from which I could create a bar chart for the three modes:
+```{r}
+area_totals <- data.frame("mode" = c("Bike", "Car", "Walk"), "Area" = c(55156694, 73836795, 5023677)) 
+
+```
+
+```{r}
+ggplot(data=area_totals, aes(x=mode, y=Area)) +
+                             geom_bar(stat="identity")
+```
+
